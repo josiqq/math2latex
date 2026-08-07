@@ -1,0 +1,198 @@
+@import "tailwindcss";
+/* Also gives us the Computer Modern family (KaTeX_Main) used for display type. */
+@import "katex/dist/katex.min.css";
+
+@custom-variant dark (&:is(.dark *));
+
+/*
+ * Palette: fountain-pen ink on quadrille paper.
+ * Light mode is a cool paper white; dark mode is slate, like a chalkboard.
+ */
+:root {
+  --radius: 0.75rem;
+
+  --background: #fafbfd;
+  --foreground: #10141c;
+
+  --card: #ffffff;
+  --card-foreground: #10141c;
+
+  --popover: #ffffff;
+  --popover-foreground: #10141c;
+
+  --primary: #2b4acf;
+  --primary-foreground: #ffffff;
+
+  --secondary: #eff2f7;
+  --secondary-foreground: #10141c;
+
+  --muted: #eff2f7;
+  --muted-foreground: #5a6474;
+
+  --accent: #eaeefb;
+  --accent-foreground: #2b4acf;
+
+  --destructive: #c0362c;
+  --destructive-foreground: #ffffff;
+
+  --border: #e3e7ee;
+  --input: #d9dfe9;
+  --ring: #2b4acf;
+
+  /* Signature surface: the ruled grid of the drop zone. */
+  --grid-line: rgb(43 74 207 / 0.08);
+  --grid-size: 22px;
+}
+
+.dark {
+  --background: #0b0f14;
+  --foreground: #e7ecf3;
+
+  --card: #12171f;
+  --card-foreground: #e7ecf3;
+
+  --popover: #12171f;
+  --popover-foreground: #e7ecf3;
+
+  --primary: #7c90ff;
+  --primary-foreground: #0b0f14;
+
+  --secondary: #1a2029;
+  --secondary-foreground: #e7ecf3;
+
+  --muted: #1a2029;
+  --muted-foreground: #939eb0;
+
+  --accent: #1a2233;
+  --accent-foreground: #a8b6ff;
+
+  --destructive: #ff6b5e;
+  --destructive-foreground: #0b0f14;
+
+  --border: #1e2530;
+  --input: #28313e;
+  --ring: #7c90ff;
+
+  --grid-line: rgb(124 144 255 / 0.1);
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  --font-sans: var(--font-plex-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-plex-mono), ui-monospace, "SFMono-Regular", monospace;
+  /* Computer Modern, the typeface of TeX itself. */
+  --font-display: "KaTeX_Main", "Iowan Old Style", Georgia, serif;
+
+  --radius-lg: var(--radius);
+  --radius-md: calc(var(--radius) - 4px);
+  --radius-sm: calc(var(--radius) - 6px);
+}
+
+@layer base {
+  * {
+    border-color: var(--border);
+  }
+
+  body {
+    background-color: var(--background);
+    color: var(--foreground);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  /* One consistent, always-visible focus treatment across the app. */
+  :focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+  }
+
+  ::selection {
+    background-color: var(--accent);
+    color: var(--accent-foreground);
+  }
+}
+
+@utility font-display {
+  font-family: var(--font-display);
+}
+
+/* The ruled paper behind the drop zone, faded out toward the edges. */
+@utility paper-grid {
+  background-image:
+    linear-gradient(to right, var(--grid-line) 1px, transparent 1px),
+    linear-gradient(to bottom, var(--grid-line) 1px, transparent 1px);
+  background-size: var(--grid-size) var(--grid-size);
+  background-position: center;
+  mask-image: radial-gradient(
+    ellipse at center,
+    rgb(0 0 0) 45%,
+    transparent 100%
+  );
+}
+
+/* Keeps a long, unbreakable rendered expression from widening the page. */
+.katex-display {
+  margin: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 0.25rem 0;
+}
+
+@keyframes rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(0.5rem);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@utility animate-rise {
+  animation: rise-in 0.4s cubic-bezier(0.2, 0.7, 0.3, 1) both;
+}
+
+@keyframes sweep {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(100%);
+  }
+}
+
+/* Indeterminate progress bar shown while the model is working. */
+@utility animate-sweep {
+  animation: sweep 1.4s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
