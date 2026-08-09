@@ -185,6 +185,27 @@ function describeApiError(error: ApiError): string {
   return parts.join(" ");
 }
 
+/** Longest prose excerpt a log line will carry from the provider. */
+const MESSAGE_EXCERPT_CHARS = 220;
+
+/**
+ * Google's prose explanation, which for a 404 names the model and the API
+ * version it was looked up under — the one thing the status codes don't say.
+ *
+ * Only safe to log for errors raised before the request body is examined;
+ * for those, Google echoes the model name and nothing the user uploaded.
+ */
+function apiErrorMessage(error: ApiError): string {
+  try {
+    const body = JSON.parse(error.message) as { error?: { message?: string } };
+    const message = body.error?.message;
+
+    return message ? message.slice(0, MESSAGE_EXCERPT_CHARS) : "";
+  } catch {
+    return "";
+  }
+}
+
 /** True for the several shapes Google uses to say "this key is no good". */
 function isCredentialError(error: ApiError, description: string): boolean {
   if (error.status === 401 || error.status === 403) return true;
@@ -273,7 +294,7 @@ async function toVisionProviderError(
         "not_configured",
         "The conversion service is not configured correctly.",
         503,
-        `AI_MODEL "${model}" not available — ${detail}; ${await listUsableModels(client)}`,
+        `AI_MODEL "${model}" not available — ${detail}: ${apiErrorMessage(error)}; ${await listUsableModels(client)}`,
       );
     }
 
