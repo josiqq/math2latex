@@ -122,6 +122,19 @@ export function createAnthropicVisionProvider(): VisionProvider {
   };
 }
 
+/**
+ * The API's own status and error type, e.g. `404 not_found_error`. Deliberately
+ * excludes the free-text message, which can echo request content back.
+ */
+function describeApiError(
+  error: InstanceType<typeof Anthropic.APIError>,
+): string {
+  const body = error.error as { error?: { type?: string } } | undefined;
+  const type = body?.error?.type;
+
+  return [String(error.status ?? "no status"), type].filter(Boolean).join(" ");
+}
+
 /** Maps SDK errors onto user-safe messages, without leaking provider detail. */
 function toVisionProviderError(error: unknown): VisionProviderError {
   if (error instanceof VisionProviderError) return error;
@@ -139,14 +152,30 @@ function toVisionProviderError(error: unknown): VisionProviderError {
       "rate_limited",
       "The service is busy right now. Please try again in a moment.",
       429,
+      describeApiError(error),
     );
   }
 
-  if (error instanceof Anthropic.AuthenticationError) {
+  if (
+    error instanceof Anthropic.AuthenticationError ||
+    error instanceof Anthropic.PermissionDeniedError
+  ) {
     return new VisionProviderError(
       "not_configured",
       "The conversion service is not configured correctly.",
       503,
+      `bad AI_API_KEY for provider "anthropic" — ${describeApiError(error)}`,
+    );
+  }
+
+  // A model the key cannot reach — a typo in AI_MODEL, or a model this
+  // account has no access to. A deployment problem, not a bad image.
+  if (error instanceof Anthropic.NotFoundError) {
+    return new VisionProviderError(
+      "not_configured",
+      "The conversion service is not configured correctly.",
+      503,
+      `AI_MODEL not available — ${describeApiError(error)}`,
     );
   }
 
@@ -163,6 +192,16 @@ function toVisionProviderError(error: unknown): VisionProviderError {
       "upstream",
       "Could not reach the conversion service. Please try again.",
       502,
+      error.name,
+    );
+  }
+
+  if (error instanceof Anthropic.APIError) {
+    return new VisionProviderError(
+      "upstream",
+      "The conversion service failed to process this image.",
+      502,
+      describeApiError(error),
     );
   }
 
@@ -170,5 +209,8 @@ function toVisionProviderError(error: unknown): VisionProviderError {
     "upstream",
     "The conversion service failed to process this image.",
     502,
+    error instanceof Error
+      ? `${error.name}: ${error.message}`
+      : "unknown error",
   );
 }

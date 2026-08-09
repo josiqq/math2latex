@@ -89,8 +89,13 @@ export async function POST(request: Request): Promise<Response> {
     return Response.json({ latex } satisfies SuccessBody, { status: 200 });
   } catch (error) {
     if (error instanceof VisionProviderError) {
-      // Log the classification only — never the prompt or the image.
-      console.error(`[convert] provider error: ${error.code}`);
+      // Log the classification and the provider's own status/reason — never
+      // the prompt or the image. Without the detail a misconfigured key is
+      // indistinguishable from a provider outage.
+      console.error(
+        `[convert] provider error: ${error.code}` +
+          (error.detail ? ` (${error.detail})` : ""),
+      );
       return fail(error.message, error.status);
     }
 
