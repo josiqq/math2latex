@@ -7,6 +7,7 @@
  */
 
 import { createAnthropicVisionProvider } from "./anthropic";
+import { createGeminiVisionProvider } from "./gemini";
 
 export type VisionErrorCode =
   /** No API key configured — a deployment problem, not a user problem. */
@@ -70,6 +71,7 @@ type ProviderFactory = () => VisionProvider;
  */
 const PROVIDERS: Record<string, ProviderFactory> = {
   anthropic: createAnthropicVisionProvider,
+  gemini: createGeminiVisionProvider,
 };
 
 export const DEFAULT_PROVIDER_ID = "anthropic";

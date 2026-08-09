@@ -14,14 +14,14 @@ live KaTeX render.
 
 ## Tech stack
 
-| Layer     | Choice                                             |
-| --------- | -------------------------------------------------- |
-| Framework | Next.js 16 (App Router, Turbopack), React 19       |
-| Language  | TypeScript, `strict` mode                          |
-| Styling   | Tailwind CSS v4, shadcn/ui component conventions   |
-| Math      | KaTeX                                              |
-| AI        | Anthropic (`claude-opus-5`) behind a provider port |
-| Tooling   | ESLint (flat config), Prettier                     |
+| Layer     | Choice                                            |
+| --------- | ------------------------------------------------- |
+| Framework | Next.js 16 (App Router, Turbopack), React 19      |
+| Language  | TypeScript, `strict` mode                         |
+| Styling   | Tailwind CSS v4, shadcn/ui component conventions  |
+| Math      | KaTeX                                             |
+| AI        | Anthropic or Google Gemini behind a provider port |
+| Tooling   | ESLint (flat config), Prettier                    |
 
 Type is IBM Plex Sans/Mono for the interface, with Computer Modern — the
 typeface of TeX itself, which ships inside KaTeX — for display headings.
@@ -54,13 +54,31 @@ AI_API_KEY=sk-ant-...
 | Variable                 | Required | Default              | Purpose                                             |
 | ------------------------ | -------- | -------------------- | --------------------------------------------------- |
 | `AI_API_KEY`             | **Yes**  | —                    | Server-side credential for the AI provider          |
-| `AI_PROVIDER`            | No       | `anthropic`          | Which provider implementation to use                |
-| `AI_MODEL`               | No       | `claude-opus-5`      | Model override                                      |
+| `AI_PROVIDER`            | No       | `anthropic`          | `anthropic` or `gemini`                             |
+| `AI_MODEL`               | No       | per provider         | Model override                                      |
 | `AI_EFFORT`              | No       | `medium`             | Reasoning depth: `low`…`max`. Raise for messy scans |
 | `NEXT_PUBLIC_GITHUB_URL` | No       | `https://github.com` | Repository link in the header                       |
 
 Only `NEXT_PUBLIC_*` variables reach the browser. `AI_API_KEY` is read solely
-inside `lib/ai/anthropic.ts`, which never runs on the client.
+inside the active provider module, which never runs on the client.
+
+### Choosing a provider
+
+| Provider    | Default model      | Cost                        |
+| ----------- | ------------------ | --------------------------- |
+| `anthropic` | `claude-opus-5`    | Paid; best on handwriting   |
+| `gemini`    | `gemini-2.5-flash` | Free tier; see caveat below |
+
+Gemini is the option to reach for if you don't want a bill: its free tier
+covers a real amount of daily traffic, and it handles printed formulae well.
+Accuracy drops relative to Opus on handwritten or densely nested notation.
+
+Be aware that Google may use **free-tier** requests to improve its models —
+paid Gemini keys are excluded. If users upload private material, that decides
+it for you.
+
+Keys: [Anthropic](https://console.anthropic.com/settings/keys) ·
+[Gemini](https://aistudio.google.com/apikey)
 
 ## Run
 
@@ -182,7 +200,8 @@ components/
   ui/                   shadcn-style primitives
 lib/
   ai/provider.ts        the port + error types + registry
-  ai/anthropic.ts       the only file that imports the AI SDK
+  ai/anthropic.ts       the only file that imports the Anthropic SDK
+  ai/gemini.ts          the only file that imports the Gemini SDK
   ai/vision.ts          OCR prompt + output normalisation
   validation.ts         shared by client and server
   rate-limit.ts
