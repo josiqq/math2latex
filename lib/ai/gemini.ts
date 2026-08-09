@@ -156,6 +156,47 @@ export function createGeminiVisionProvider(): VisionProvider {
   };
 }
 
+/**
+ * Google reports the machine-readable reason inside a JSON body carried on the
+ * error message, so the useful part has to be dug out rather than read off a
+ * field. Returns the `status`/`reason` pair, e.g. `INVALID_ARGUMENT`,
+ * `API_KEY_INVALID`.
+ */
+function describeApiError(error: ApiError): string {
+  const parts = [String(error.status)];
+
+  try {
+    const body = JSON.parse(error.message) as {
+      error?: {
+        status?: string;
+        details?: Array<{ reason?: string }>;
+      };
+    };
+
+    const status = body.error?.status;
+    if (status) parts.push(status);
+
+    const reason = body.error?.details?.find((d) => d.reason)?.reason;
+    if (reason) parts.push(reason);
+  } catch {
+    // Not every failure carries a JSON body; the status alone still helps.
+  }
+
+  return parts.join(" ");
+}
+
+/** True for the several shapes Google uses to say "this key is no good". */
+function isCredentialError(error: ApiError, description: string): boolean {
+  if (error.status === 401 || error.status === 403) return true;
+
+  // An invalid or wrong-provider key comes back as a plain 400, which is
+  // otherwise indistinguishable from a malformed request.
+  return (
+    error.status === 400 &&
+    /API_KEY_INVALID|PERMISSION_DENIED|UNAUTHENTICATED/.test(description)
+  );
+}
+
 /** Maps SDK errors onto user-safe messages, without leaking provider detail. */
 function toVisionProviderError(error: unknown): VisionProviderError {
   if (error instanceof VisionProviderError) return error;
@@ -174,26 +215,51 @@ function toVisionProviderError(error: unknown): VisionProviderError {
   }
 
   if (error instanceof ApiError) {
+    const detail = describeApiError(error);
+
     if (error.status === 429) {
       return new VisionProviderError(
         "rate_limited",
         "The service is busy right now. Please try again in a moment.",
         429,
+        detail,
       );
     }
 
-    if (error.status === 401 || error.status === 403) {
+    if (isCredentialError(error, detail)) {
       return new VisionProviderError(
         "not_configured",
         "The conversion service is not configured correctly.",
         503,
+        `bad AI_API_KEY for provider "gemini" — ${detail}`,
       );
     }
+
+    // A model the key cannot reach — a typo in AI_MODEL, or a model this
+    // account has no access to. Also a deployment problem, not a bad image.
+    if (error.status === 404) {
+      return new VisionProviderError(
+        "not_configured",
+        "The conversion service is not configured correctly.",
+        503,
+        `AI_MODEL not available — ${detail}`,
+      );
+    }
+
+    return new VisionProviderError(
+      "upstream",
+      "The conversion service failed to process this image.",
+      502,
+      detail,
+    );
   }
 
   return new VisionProviderError(
     "upstream",
     "The conversion service failed to process this image.",
     502,
+    error instanceof Error
+      ? `${error.name}: ${error.message}`
+      : "unknown error",
   );
 }
