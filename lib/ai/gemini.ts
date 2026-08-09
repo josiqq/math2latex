@@ -18,8 +18,15 @@ import {
  * excluded from that. Choose accordingly for the images your users upload.
  */
 
-/** Free-tier eligible and the strongest of the cheap models at dense notation. */
-const DEFAULT_MODEL = "gemini-2.5-flash";
+/**
+ * Free-tier eligible and the strongest of the cheap models at dense notation.
+ *
+ * The floating alias, not a pinned version: Google closes retired models to
+ * new API keys while still listing them, so a pinned default works until the
+ * day someone deploys this with a fresh key and gets nothing but 404s. Pin via
+ * `AI_MODEL` when a specific version matters more than staying reachable.
+ */
+const DEFAULT_MODEL = "gemini-flash-latest";
 
 /**
  * Gemini counts thinking tokens against `maxOutputTokens`, so a budget too
@@ -115,7 +122,7 @@ export function createGeminiVisionProvider(): VisionProvider {
           },
         });
       } catch (error) {
-        throw toVisionProviderError(error);
+        throw await toVisionProviderError(error, client);
       }
 
       // A blocked prompt and a declined answer are reported in two different
@@ -156,8 +163,99 @@ export function createGeminiVisionProvider(): VisionProvider {
   };
 }
 
+/**
+ * Google reports the machine-readable reason inside a JSON body carried on the
+ * error message, so the useful part has to be dug out rather than read off a
+ * field. Returns the `status`/`reason` pair, e.g. `INVALID_ARGUMENT`,
+ * `API_KEY_INVALID`.
+ */
+function describeApiError(error: ApiError): string {
+  const parts = [String(error.status)];
+
+  try {
+    const body = JSON.parse(error.message) as {
+      error?: {
+        status?: string;
+        details?: Array<{ reason?: string }>;
+      };
+    };
+
+    const status = body.error?.status;
+    if (status) parts.push(status);
+
+    const reason = body.error?.details?.find((d) => d.reason)?.reason;
+    if (reason) parts.push(reason);
+  } catch {
+    // Not every failure carries a JSON body; the status alone still helps.
+  }
+
+  return parts.join(" ");
+}
+
+/** Longest prose excerpt a log line will carry from the provider. */
+const MESSAGE_EXCERPT_CHARS = 220;
+
+/**
+ * Google's prose explanation, which for a 404 names the model and the API
+ * version it was looked up under — the one thing the status codes don't say.
+ *
+ * Only safe to log for errors raised before the request body is examined;
+ * for those, Google echoes the model name and nothing the user uploaded.
+ */
+function apiErrorMessage(error: ApiError): string {
+  try {
+    const body = JSON.parse(error.message) as { error?: { message?: string } };
+    const message = body.error?.message;
+
+    return message ? message.slice(0, MESSAGE_EXCERPT_CHARS) : "";
+  } catch {
+    return "";
+  }
+}
+
+/** True for the several shapes Google uses to say "this key is no good". */
+function isCredentialError(error: ApiError, description: string): boolean {
+  if (error.status === 401 || error.status === 403) return true;
+
+  // An invalid or wrong-provider key comes back as a plain 400, which is
+  // otherwise indistinguishable from a malformed request.
+  return (
+    error.status === 400 &&
+    /API_KEY_INVALID|PERMISSION_DENIED|UNAUTHENTICATED/.test(description)
+  );
+}
+
+/** How many model names the 404 log line is allowed to carry. */
+const MODEL_HINT_LIMIT = 12;
+
+/**
+ * The models this key can actually call, so a 404 says what to put in
+ * `AI_MODEL` instead of only what failed. Best effort — a failure here must
+ * never replace the error actually being reported.
+ */
+async function listUsableModels(client: GoogleGenAI): Promise<string> {
+  try {
+    const names: string[] = [];
+
+    for await (const model of await client.models.list()) {
+      if (!model.supportedActions?.includes("generateContent")) continue;
+
+      const name = model.name?.replace(/^models\//, "");
+      if (name) names.push(name);
+      if (names.length >= MODEL_HINT_LIMIT) break;
+    }
+
+    return names.length > 0 ? `try one of: ${names.join(", ")}` : "none listed";
+  } catch {
+    return "model list unavailable";
+  }
+}
+
 /** Maps SDK errors onto user-safe messages, without leaking provider detail. */
-function toVisionProviderError(error: unknown): VisionProviderError {
+async function toVisionProviderError(
+  error: unknown,
+  client: GoogleGenAI,
+): Promise<VisionProviderError> {
   if (error instanceof VisionProviderError) return error;
 
   // `abortSignal` aborts client-side, so the timeout surfaces as a
@@ -174,26 +272,53 @@ function toVisionProviderError(error: unknown): VisionProviderError {
   }
 
   if (error instanceof ApiError) {
+    const detail = describeApiError(error);
+
     if (error.status === 429) {
       return new VisionProviderError(
         "rate_limited",
         "The service is busy right now. Please try again in a moment.",
         429,
+        detail,
       );
     }
 
-    if (error.status === 401 || error.status === 403) {
+    if (isCredentialError(error, detail)) {
       return new VisionProviderError(
         "not_configured",
         "The conversion service is not configured correctly.",
         503,
+        `bad AI_API_KEY for provider "gemini" — ${detail}`,
       );
     }
+
+    // A model the key cannot reach — a typo in AI_MODEL, or a model this
+    // account has no access to. Also a deployment problem, not a bad image.
+    if (error.status === 404) {
+      const model = process.env.AI_MODEL?.trim() || DEFAULT_MODEL;
+
+      return new VisionProviderError(
+        "not_configured",
+        "The conversion service is not configured correctly.",
+        503,
+        `AI_MODEL "${model}" not available — ${detail}: ${apiErrorMessage(error)}; ${await listUsableModels(client)}`,
+      );
+    }
+
+    return new VisionProviderError(
+      "upstream",
+      "The conversion service failed to process this image.",
+      502,
+      detail,
+    );
   }
 
   return new VisionProviderError(
     "upstream",
     "The conversion service failed to process this image.",
     502,
+    error instanceof Error
+      ? `${error.name}: ${error.message}`
+      : "unknown error",
   );
 }
