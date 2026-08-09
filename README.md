@@ -64,10 +64,10 @@ inside the active provider module, which never runs on the client.
 
 ### Choosing a provider
 
-| Provider    | Default model      | Cost                        |
-| ----------- | ------------------ | --------------------------- |
-| `anthropic` | `claude-opus-5`    | Paid; best on handwriting   |
-| `gemini`    | `gemini-2.5-flash` | Free tier; see caveat below |
+| Provider    | Default model         | Cost                        |
+| ----------- | --------------------- | --------------------------- |
+| `anthropic` | `claude-opus-5`       | Paid; best on handwriting   |
+| `gemini`    | `gemini-flash-latest` | Free tier; see caveat below |
 
 Gemini is the option to reach for if you don't want a bill: its free tier
 covers a real amount of daily traffic, and it handles printed formulae well.

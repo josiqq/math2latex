@@ -27,12 +27,25 @@ export type VisionErrorCode =
 export class VisionProviderError extends Error {
   readonly code: VisionErrorCode;
   readonly status: number;
+  /**
+   * Operator-facing diagnostic — the provider's own status and reason.
+   *
+   * Logged by the route, never sent to the client. Providers must only put
+   * their own error metadata here: never the prompt, and never image bytes.
+   */
+  readonly detail?: string;
 
-  constructor(code: VisionErrorCode, message: string, status: number) {
+  constructor(
+    code: VisionErrorCode,
+    message: string,
+    status: number,
+    detail?: string,
+  ) {
     super(message);
     this.name = "VisionProviderError";
     this.code = code;
     this.status = status;
+    this.detail = detail;
   }
 }
 
