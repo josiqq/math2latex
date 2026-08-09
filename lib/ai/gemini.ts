@@ -18,8 +18,15 @@ import {
  * excluded from that. Choose accordingly for the images your users upload.
  */
 
-/** Free-tier eligible and the strongest of the cheap models at dense notation. */
-const DEFAULT_MODEL = "gemini-2.5-flash";
+/**
+ * Free-tier eligible and the strongest of the cheap models at dense notation.
+ *
+ * The floating alias, not a pinned version: Google closes retired models to
+ * new API keys while still listing them, so a pinned default works until the
+ * day someone deploys this with a fresh key and gets nothing but 404s. Pin via
+ * `AI_MODEL` when a specific version matters more than staying reachable.
+ */
+const DEFAULT_MODEL = "gemini-flash-latest";
 
 /**
  * Gemini counts thinking tokens against `maxOutputTokens`, so a budget too
