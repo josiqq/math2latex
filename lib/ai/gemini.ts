@@ -18,8 +18,14 @@ import {
  * excluded from that. Choose accordingly for the images your users upload.
  */
 
-/** Free-tier eligible and the strongest of the cheap models at dense notation. */
-const DEFAULT_MODEL = "gemini-2.5-flash";
+/**
+ * Free-tier eligible and the strongest of the cheap models at dense notation.
+ *
+ * Keep this current: Google retires older models for *new* API keys while they
+ * still appear in `models.list`, so a stale default fails only for people who
+ * just signed up — `gemini-2.5-flash` reached that state.
+ */
+const DEFAULT_MODEL = "gemini-3.6-flash";
 
 /**
  * Gemini counts thinking tokens against `maxOutputTokens`, so a budget too
@@ -174,6 +180,10 @@ function toVisionProviderError(error: unknown): VisionProviderError {
   }
 
   if (error instanceof ApiError) {
+    // The status alone is safe to log and is the only clue that survives the
+    // mapping to a user-facing message.
+    console.error(`[gemini] api error status: ${error.status}`);
+
     if (error.status === 429) {
       return new VisionProviderError(
         "rate_limited",
@@ -182,7 +192,9 @@ function toVisionProviderError(error: unknown): VisionProviderError {
       );
     }
 
-    if (error.status === 401 || error.status === 403) {
+    // A rejected key and a retired or misspelled model are both deployment
+    // problems, and both need the operator — not the user — to act.
+    if (error.status === 401 || error.status === 403 || error.status === 404) {
       return new VisionProviderError(
         "not_configured",
         "The conversion service is not configured correctly.",
