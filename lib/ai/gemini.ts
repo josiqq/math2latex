@@ -115,7 +115,7 @@ export function createGeminiVisionProvider(): VisionProvider {
           },
         });
       } catch (error) {
-        throw toVisionProviderError(error);
+        throw await toVisionProviderError(error, client);
       }
 
       // A blocked prompt and a declined answer are reported in two different
@@ -197,8 +197,37 @@ function isCredentialError(error: ApiError, description: string): boolean {
   );
 }
 
+/** How many model names the 404 log line is allowed to carry. */
+const MODEL_HINT_LIMIT = 12;
+
+/**
+ * The models this key can actually call, so a 404 says what to put in
+ * `AI_MODEL` instead of only what failed. Best effort — a failure here must
+ * never replace the error actually being reported.
+ */
+async function listUsableModels(client: GoogleGenAI): Promise<string> {
+  try {
+    const names: string[] = [];
+
+    for await (const model of await client.models.list()) {
+      if (!model.supportedActions?.includes("generateContent")) continue;
+
+      const name = model.name?.replace(/^models\//, "");
+      if (name) names.push(name);
+      if (names.length >= MODEL_HINT_LIMIT) break;
+    }
+
+    return names.length > 0 ? `try one of: ${names.join(", ")}` : "none listed";
+  } catch {
+    return "model list unavailable";
+  }
+}
+
 /** Maps SDK errors onto user-safe messages, without leaking provider detail. */
-function toVisionProviderError(error: unknown): VisionProviderError {
+async function toVisionProviderError(
+  error: unknown,
+  client: GoogleGenAI,
+): Promise<VisionProviderError> {
   if (error instanceof VisionProviderError) return error;
 
   // `abortSignal` aborts client-side, so the timeout surfaces as a
@@ -238,11 +267,13 @@ function toVisionProviderError(error: unknown): VisionProviderError {
     // A model the key cannot reach — a typo in AI_MODEL, or a model this
     // account has no access to. Also a deployment problem, not a bad image.
     if (error.status === 404) {
+      const model = process.env.AI_MODEL?.trim() || DEFAULT_MODEL;
+
       return new VisionProviderError(
         "not_configured",
         "The conversion service is not configured correctly.",
         503,
-        `AI_MODEL not available — ${detail}`,
+        `AI_MODEL "${model}" not available — ${detail}; ${await listUsableModels(client)}`,
       );
     }
 
