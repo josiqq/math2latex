@@ -57,7 +57,7 @@ AI_API_KEY=sk-ant-...
 | `AI_PROVIDER`            | No       | `anthropic`          | `anthropic` or `gemini`                             |
 | `AI_MODEL`               | No       | per provider         | Model override                                      |
 | `AI_EFFORT`              | No       | `medium`             | Reasoning depth: `low`…`max`. Raise for messy scans |
-| `NEXT_PUBLIC_GITHUB_URL` | No       | `https://github.com` | Repository link in the header                       |
+| `NEXT_PUBLIC_GITHUB_URL` | No       | repo URL             | Repository link in the header                       |
 
 Only `NEXT_PUBLIC_*` variables reach the browser. `AI_API_KEY` is read solely
 inside the active provider module, which never runs on the client.
