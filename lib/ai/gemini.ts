@@ -21,12 +21,11 @@ import {
 /**
  * Free-tier eligible and the strongest of the cheap models at dense notation.
  *
- * The floating alias, not a pinned version: Google closes retired models to
- * new API keys while still listing them, so a pinned default works until the
- * day someone deploys this with a fresh key and gets nothing but 404s. Pin via
- * `AI_MODEL` when a specific version matters more than staying reachable.
+ * Keep this current: Google retires older models for *new* API keys while they
+ * still appear in `models.list`, so a stale default fails only for people who
+ * just signed up — `gemini-2.5-flash` reached that state.
  */
-const DEFAULT_MODEL = "gemini-flash-latest";
+const DEFAULT_MODEL = "gemini-3.6-flash";
 
 /**
  * Gemini counts thinking tokens against `maxOutputTokens`, so a budget too
@@ -272,7 +271,9 @@ async function toVisionProviderError(
   }
 
   if (error instanceof ApiError) {
-    const detail = describeApiError(error);
+    // The status alone is safe to log and is the only clue that survives the
+    // mapping to a user-facing message.
+    console.error(`[gemini] api error status: ${error.status}`);
 
     if (error.status === 429) {
       return new VisionProviderError(
@@ -283,7 +284,9 @@ async function toVisionProviderError(
       );
     }
 
-    if (isCredentialError(error, detail)) {
+    // A rejected key and a retired or misspelled model are both deployment
+    // problems, and both need the operator — not the user — to act.
+    if (error.status === 401 || error.status === 403 || error.status === 404) {
       return new VisionProviderError(
         "not_configured",
         "The conversion service is not configured correctly.",
